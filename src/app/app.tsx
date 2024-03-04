@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import styled, { DefaultTheme } from "styled-components";
 
 const resourceMangMeta = {
   woodScaler: 0.2,
@@ -10,6 +11,46 @@ const resourceMangMeta = {
     populationCount: 2,
   },
   maxPopulationBase: 10,
+};
+
+interface ThemeInterface {
+  blue: {
+    default: string;
+    hover: string;
+  };
+  pink: {
+    default: string;
+    hover: string;
+  };
+}
+
+const theme: ThemeInterface = {
+  blue: {
+    default: "#3f51b5",
+    hover: "#283593",
+  },
+  pink: {
+    default: "#e91e63",
+    hover: "#ad1457",
+  },
+};
+
+const Button = styled.button`
+  background-color: ${(props) => props.theme.default};
+  color: white;
+  padding: 5px 15px;
+  border-radius: 5px;
+  outline: 0;
+  border: 0;
+  text-transform: uppercase;
+  margin: 10px 0px;
+  cursor: pointer;
+  box-shadow: 0px 2px 2px lightgray;
+  transition: ease background-color 250ms;
+`;
+
+Button.defaultProps = {
+  theme: theme.blue,
 };
 
 /**
@@ -33,28 +74,6 @@ export default function TimeTravelTycoon() {
     handleGameTick();
     setTime(Date.now());
   }, 1000);
-  // useEffect(() => {
-  //   return () => {
-  //     clearInterval(interval);
-  //   };
-  // }, []);
-
-  // useEffect(() => {
-  //   const interval = setInterval(() => {
-  //     handleGameTick({
-  //       woodCount,
-  //     });
-  //     setTime(Date.now());
-  //   }, 1000);
-  //   return () => {
-  //     clearInterval(interval);
-  //   };
-  // }, []);
-
-  // intervalId = setInterval(() => {
-  //   handleGameTick();
-  // });
-  // function handleGameTick(resources: { woodCount: number }) {
   function handleGameTick() {
     // Only set the states if there are worker populations to do so.
     if (populationCount) {
@@ -63,8 +82,8 @@ export default function TimeTravelTycoon() {
 
       console.log(woodGathered);
       if (Math.floor(woodGathered.current) >= 1) {
-        console.log("trigger: ", Math.floor(woodGathered.current));
-        console.log("wood: ", woodCount);
+        // console.log("trigger: ", Math.floor(woodGathered.current));
+        // console.log("wood: ", woodCount);
         // console.log("resources.woodCount: ", resources.woodCount);
         // setWood(resources.woodCount + Math.floor(woodGathered.current));
         setWood(woodCount + Math.floor(woodGathered.current));
@@ -89,9 +108,9 @@ export default function TimeTravelTycoon() {
 
   return (
     <>
-      <button onClick={handleWoodButtonClick}>Collect Wood</button>
+      <Button onClick={handleWoodButtonClick}>Collect Wood</Button>
       <h3>Wood: {woodCount}</h3>
-      <button onClick={handleHutButtonClick}>Build A Hut</button>
+      <Button onClick={handleHutButtonClick}>Build A Hut</Button>
       <h4>Costs: {resourceMangMeta.hutCost.base}</h4>
       <h3>Population: {populationCount}</h3>
     </>
