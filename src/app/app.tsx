@@ -3,15 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import styled, { DefaultTheme } from "styled-components";
 
-const resourceMangMeta = {
-  woodScaler: 0.2,
-  hutCost: {
-    base: 10,
-    scaler: 0.4,
-    populationCount: 2,
-  },
-  maxPopulationBase: 10,
-};
+import {
+  resourceMangMeta as res,
+  resourcesI,
+  travelersI,
+} from "./resourceService/resourcesService";
 
 interface ThemeInterface {
   blue: {
@@ -66,8 +62,17 @@ export default function TimeTravelTycoon() {
   let intervalId;
   // Rearouses state
   const [woodCount, setWood] = useState(0);
+  // const woodCount = useRef(0);
   const woodGathered = useRef(0);
-  const [populationCount, setPopulationCount] = useState(1);
+  const [travelers, setTravelers] = useState<Array<travelersI>>([]);
+  // const [populationCount, setPopulationCount] = useState(1);
+
+  // TODO: use local
+  const populationDistribution = useRef({
+    unemployed: 1,
+    woodCutters: 0,
+    timeResourceInvestor: 0,
+  });
 
   const [time, setTime] = useState(Date.now());
   const interval = setInterval(() => {
@@ -75,44 +80,148 @@ export default function TimeTravelTycoon() {
     setTime(Date.now());
   }, 1000);
   function handleGameTick() {
-    // Only set the states if there are worker populations to do so.
-    if (populationCount) {
-      woodGathered.current =
-        woodGathered.current + populationCount * resourceMangMeta.woodScaler;
+    // console.log(interval);
 
-      console.log(woodGathered);
+    // Only set the states if there are worker populations to do so.
+    if (populationDistribution.current.woodCutters) {
+      woodGathered.current +=
+        populationDistribution.current.woodCutters * res.woodScaler;
       if (Math.floor(woodGathered.current) >= 1) {
-        // console.log("trigger: ", Math.floor(woodGathered.current));
-        // console.log("wood: ", woodCount);
-        // console.log("resources.woodCount: ", resources.woodCount);
-        // setWood(resources.woodCount + Math.floor(woodGathered.current));
         setWood(woodCount + Math.floor(woodGathered.current));
         woodGathered.current = 0;
       }
     }
-
+    if (
+      populationDistribution.current.timeResourceInvestor &&
+      woodCount > res.travelersCost.baseWoodLoad
+    ) {
+      // Rules for a Time investor:
+      //  An investor can only take X total resources. Weight.
+      //  Once taken, the investor is stuck in Time.
+      //  There must be some kind of "future" pay out.
+      if (travelers.length) {
+        travelers.map((traveler, i) => {
+          traveler.timeInTransit += 1;
+          // TODO: set to a value the user can change. Gives weight to their choice for "idle" time
+          const logOfTime = Math.log10(traveler.timeInTransit + 1);
+          if (logOfTime > res.travelersCost.baseMaxTransitTime) {
+            // TODO: make a functional component for in game dialog
+            console.log(
+              "A traveler from the past has appear! The brought with time trade from long ago that is more valuable."
+            );
+            const woodGatheredInTime =
+              traveler.trade.wood * res.travelersCost.baseTradeMultiplier;
+            setWood(woodCount + woodGatheredInTime);
+            traveler.timeInTransit = 0;
+          }
+        });
+      }
+      if (
+        travelers.length < populationDistribution.current.timeResourceInvestor
+      ) {
+        setTravelers([
+          ...travelers,
+          {
+            trade: {
+              wood: res.travelersCost.baseWoodLoad,
+            },
+            timeInTransit: 0,
+          },
+        ]);
+        setWood(woodCount - res.travelersCost.baseWoodLoad);
+      }
+    }
     clearInterval(interval);
   }
 
+  // TODO: create function module for displaying the Job Board
+  const addWoodCutterJob = (): void => {
+    populationDistribution.current.unemployed -= 1;
+    populationDistribution.current.woodCutters += 1;
+  };
+  const removeWoodCutterJob = (): void => {
+    populationDistribution.current.unemployed += 1;
+    populationDistribution.current.woodCutters -= 1;
+  };
+
+  const addTimeInvestorJob = (): void => {
+    populationDistribution.current.unemployed -= 1;
+    populationDistribution.current.timeResourceInvestor += 1;
+  };
+  const removeTimeInvestorJob = (): void => {
+    populationDistribution.current.unemployed += 1;
+    populationDistribution.current.timeResourceInvestor -= 1;
+  };
+
   function handleWoodButtonClick() {
+    console.log("wood click more");
     setWood(woodCount + 1);
   }
 
   function handleHutButtonClick() {
-    if (woodCount > resourceMangMeta.hutCost.base) {
-      setPopulationCount(
-        populationCount + resourceMangMeta.hutCost.populationCount
-      );
+    const hutTotalCost = res.hutCost.base;
+    if (woodCount >= hutTotalCost) {
+      populationDistribution.current.unemployed += res.hutCost.populationCount;
+      setWood(woodCount - hutTotalCost);
     }
   }
+
+  const getTotalPopulation = (): number =>
+    Object.values(populationDistribution.current).reduce(
+      (acc, cur) => acc + cur
+    );
 
   return (
     <>
       <Button onClick={handleWoodButtonClick}>Collect Wood</Button>
       <h3>Wood: {woodCount}</h3>
       <Button onClick={handleHutButtonClick}>Build A Hut</Button>
-      <h4>Costs: {resourceMangMeta.hutCost.base}</h4>
-      <h3>Population: {populationCount}</h3>
+      <h4>Costs: {res.hutCost.base}</h4>
+      <h3>Population: {getTotalPopulation()}</h3>
+
+      <view
+        style={{
+          flexDirection: "row",
+          marginLeft: 20,
+          justifyContent: "space-evenly",
+        }}
+      >
+        Wood cutters {populationDistribution.current.woodCutters}:
+        <button
+          onClick={addWoodCutterJob}
+          disabled={populationDistribution.current.unemployed == 0}
+        >
+          +
+        </button>
+        <button
+          onClick={removeWoodCutterJob}
+          disabled={populationDistribution.current.woodCutters == 0}
+        >
+          -
+        </button>
+      </view>
+      <view
+        style={{
+          flexDirection: "row",
+          marginLeft: 20,
+          justifyContent: "space-evenly",
+        }}
+      >
+        Time Investors {populationDistribution.current.timeResourceInvestor}:
+        <button
+          onClick={addTimeInvestorJob}
+          disabled={populationDistribution.current.unemployed == 0}
+        >
+          +
+        </button>
+        <button
+          onClick={removeTimeInvestorJob}
+          disabled={populationDistribution.current.timeResourceInvestor == 0}
+        >
+          -
+        </button>
+      </view>
+      <div></div>
     </>
   );
 }
