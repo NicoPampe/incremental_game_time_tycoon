@@ -1,52 +1,40 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import styled, { DefaultTheme } from "styled-components";
-
+import Button from "./components/utils/button";
 import {
   resourceMangMeta as res,
-  resourcesI,
   travelersI,
 } from "./resourceService/resourcesService";
 
-interface ThemeInterface {
-  blue: {
-    default: string;
-    hover: string;
-  };
-  pink: {
-    default: string;
-    hover: string;
-  };
-}
+import Wood from "./components/wood";
 
-const theme: ThemeInterface = {
-  blue: {
-    default: "#3f51b5",
-    hover: "#283593",
-  },
-  pink: {
-    default: "#e91e63",
-    hover: "#ad1457",
-  },
+// Inspiration for timer loop: https://medium.com/projector-hq/writing-a-run-loop-in-javascript-react-9605f74174b
+const useFrameTime = () => {
+  const [frameTime, setFrameTime] = useState(performance.now());
+  useEffect(() => {
+    // TODO: time should be typed
+    let frameId: any;
+    const frame = (time: any) => {
+      setFrameTime(time);
+      frameId = requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(frameId);
+  }, []);
+  return frameTime;
 };
 
-const Button = styled.button`
-  background-color: ${(props) => props.theme.default};
-  color: white;
-  padding: 5px 15px;
-  border-radius: 5px;
-  outline: 0;
-  border: 0;
-  text-transform: uppercase;
-  margin: 10px 0px;
-  cursor: pointer;
-  box-shadow: 0px 2px 2px lightgray;
-  transition: ease background-color 250ms;
-`;
+const Timer = () => {
+  // Use state if need be later. But currently I have no need to reRender
+  const startTime = useRef(performance.now());
+  const frameTime = useFrameTime();
+  const resetTimer = () => {
+    startTime.current = performance.now();
+  };
 
-Button.defaultProps = {
-  theme: theme.blue,
+  const time = frameTime - startTime.current;
+  return { time, resetTimer };
 };
 
 /**
@@ -56,16 +44,10 @@ Button.defaultProps = {
  */
 // Time Travel Tycoon: Players control a time-traveling company, sending agents to different historical eras to gather resources and influence pivotal events. Manage resources like chronotons, historical artifacts, and knowledge points to upgrade time machines, hire historical figures, and alter the timeline to your advantage. Be careful of paradoxes that could disrupt the fabric of reality!
 export default function TimeTravelTycoon() {
-  // In game clock.
-  // TODO: Need to calc the since last loaded. A starting point. Maybe that is all collected in "resources" from local storage.
-  const inGameTimerRef = useRef(0);
-  let intervalId;
   // Rearouses state
-  const [woodCount, setWood] = useState(0);
-  // const woodCount = useRef(0);
+  const [woodCount, setWood] = useState({ count: 0 });
   const woodGathered = useRef(0);
   const [travelers, setTravelers] = useState<Array<travelersI>>([]);
-  // const [populationCount, setPopulationCount] = useState(1);
 
   // TODO: use local
   const populationDistribution = useRef({
@@ -74,27 +56,46 @@ export default function TimeTravelTycoon() {
     timeResourceInvestor: 0,
   });
 
-  const [time, setTime] = useState(Date.now());
-  const interval = setInterval(() => {
+  //////////////////////////////////////////////////////////////////////////////////////////////////
+  // Set Up the Game Timer loop
+  // Set Up all our resource value changes on a Game Tick.
+  const tickTime = 1000; // about 1 sec
+  const timer = Timer();
+  if (timer.time > tickTime) {
     handleGameTick();
-    setTime(Date.now());
-  }, 1000);
-  function handleGameTick() {
-    // console.log(interval);
+    timer.resetTimer();
+  }
 
-    // Only set the states if there are worker populations to do so.
+  function handleGameTick() {
     if (populationDistribution.current.woodCutters) {
-      woodGathered.current +=
-        populationDistribution.current.woodCutters * res.woodScaler;
-      if (Math.floor(woodGathered.current) >= 1) {
-        setWood(woodCount + Math.floor(woodGathered.current));
-        woodGathered.current = 0;
-      }
+      handleWoodCutter();
     }
-    if (
-      populationDistribution.current.timeResourceInvestor &&
-      woodCount > res.travelersCost.baseWoodLoad
-    ) {
+    if (populationDistribution.current.timeResourceInvestor) {
+      handleTimeTravelers();
+    }
+  }
+
+  function handleWoodCutter() {
+    woodGathered.current +=
+      populationDistribution.current.woodCutters * res.woodScaler;
+    if (Math.floor(woodGathered.current) >= 1) {
+      handleWoodChange(Math.floor(woodGathered.current));
+      woodGathered.current = 0;
+    }
+  }
+
+  function handleWoodChange(delta: number) {
+    setWood((prevState) => {
+      return {
+        ...{
+          count: prevState.count + delta,
+        },
+      };
+    });
+  }
+
+  function handleTimeTravelers() {
+    if (woodCount.count > res.travelersCost.baseWoodLoad) {
       // Rules for a Time investor:
       //  An investor can only take X total resources. Weight.
       //  Once taken, the investor is stuck in Time.
@@ -106,12 +107,13 @@ export default function TimeTravelTycoon() {
           const logOfTime = Math.log10(traveler.timeInTransit + 1);
           if (logOfTime > res.travelersCost.baseMaxTransitTime) {
             // TODO: make a functional component for in game dialog
-            console.log(
-              "A traveler from the past has appear! The brought with time trade from long ago that is more valuable."
-            );
-            const woodGatheredInTime =
+            const woodGatheredMultipliedInTime =
               traveler.trade.wood * res.travelersCost.baseTradeMultiplier;
-            setWood(woodCount + woodGatheredInTime);
+            console.log(
+              "A traveler from the past has appear! The brought with time trade from long ago that is more valuable. They gathered: ",
+              woodGatheredMultipliedInTime
+            );
+            handleWoodChange(woodGatheredMultipliedInTime);
             traveler.timeInTransit = 0;
           }
         });
@@ -128,10 +130,9 @@ export default function TimeTravelTycoon() {
             timeInTransit: 0,
           },
         ]);
-        setWood(woodCount - res.travelersCost.baseWoodLoad);
+        handleWoodChange(-res.travelersCost.baseWoodLoad);
       }
     }
-    clearInterval(interval);
   }
 
   // TODO: create function module for displaying the Job Board
@@ -154,15 +155,14 @@ export default function TimeTravelTycoon() {
   };
 
   function handleWoodButtonClick() {
-    console.log("wood click more");
-    setWood(woodCount + 1);
+    handleWoodChange(1);
   }
 
   function handleHutButtonClick() {
     const hutTotalCost = res.hutCost.base;
-    if (woodCount >= hutTotalCost) {
+    if (woodCount.count >= hutTotalCost) {
       populationDistribution.current.unemployed += res.hutCost.populationCount;
-      setWood(woodCount - hutTotalCost);
+      handleWoodChange(-hutTotalCost);
     }
   }
 
@@ -174,7 +174,7 @@ export default function TimeTravelTycoon() {
   return (
     <>
       <Button onClick={handleWoodButtonClick}>Collect Wood</Button>
-      <h3>Wood: {woodCount}</h3>
+      <Wood woodCount={woodCount.count} />
       <Button onClick={handleHutButtonClick}>Build A Hut</Button>
       <h4>Costs: {res.hutCost.base}</h4>
       <h3>Population: {getTotalPopulation()}</h3>

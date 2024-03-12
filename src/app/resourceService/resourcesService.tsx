@@ -1,7 +1,4 @@
 // TODO: build a graph for more relation.
-enum resourceTypes {
-  wood = "wood",
-}
 export interface resourcesI {
   wood: number;
 }
@@ -13,7 +10,7 @@ export interface travelersI {
 
 // I want a CRUD style for managing what values.
 export const resourceMangMeta = {
-  woodScaler: 0.2,
+  woodScaler: 0.1,
   hutCost: {
     base: 10,
     scaler: 0.4,
@@ -21,7 +18,7 @@ export const resourceMangMeta = {
   },
   travelersCost: {
     baseWoodLoad: 10,
-    baseMaxTransitTime: 3,
+    baseMaxTransitTime: 2,
     baseTradeMultiplier: 1.5,
   },
   maxPopulationBase: 10,
